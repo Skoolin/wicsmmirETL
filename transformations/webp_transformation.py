@@ -13,9 +13,9 @@ class WebPTransformation(ImageTransformationBase):
 
     def apply(self, img: Image, **kwargs) -> Image:
         path = kwargs['img_path']
-        if '.png' in path:
-            path = path.replace('.png', '.webp')
-        assert path[-5:] == '.webp', f"Cannot set webp extension to image path {path}"
+        if '.webp' in path:
+            path = path.replace('.webp', '.png')
+        assert path[-4:] == '.png', f"Cannot set png extension to image path {path}"
 
         img.save(path,
                  lossless=self.lossless,

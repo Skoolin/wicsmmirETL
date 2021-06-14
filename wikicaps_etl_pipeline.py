@@ -9,7 +9,9 @@ from tqdm import tqdm
 
 from filters import create_filters_from_config
 from transformations import create_image_transformations_from_config
-from utils import ImageOutputFormat, download_wikimedia_img, apply_img_transformations, generate_caption_stats
+from transformations.ne_transformation import NETransformation
+from utils import ImageOutputFormat, download_wikimedia_img, apply_img_transformations, generate_caption_stats, \
+    apply_text_transformations
 
 
 class WikiCapsETLPipeline(object):
@@ -38,6 +40,7 @@ class WikiCapsETLPipeline(object):
 
         # transformation setup
         self.image_transformations = create_image_transformations_from_config(config)
+        self.text_transformations = [NETransformation()]
         self.n_transformation_workers = config.transformation.n_workers
 
         # output/loading setup
@@ -198,7 +201,32 @@ class WikiCapsETLPipeline(object):
         # remove images where the transformation status was erroneous
         erroneous = len(success) - sum(success)
         if erroneous != 0:
-            logger.warning(f"Removing {erroneous} samples due to errors while applying transformations!")
+            logger.warning(f"Removing {erroneous} samples due to errors while applying image transformations!")
+        self.metadata = self.metadata[success]
+
+        logger.info(
+            f"Applying 1 Text Transformations to {len(self.metadata)} captions!")
+
+        with ThreadPoolExecutor(max_workers=self.n_transformation_workers) as executor:
+            with tqdm(total=len(self.metadata)) as progress:
+                futures = []
+                for row_id, row in self.metadata.iterrows():
+                    # submit a text transformation task for every caption
+                    future = executor.submit(apply_text_transformations,
+                                             row_id,
+                                             row,
+                                             self.metadata,
+                                             self.text_transformations)
+                    future.add_done_callback(lambda p: progress.update())
+                    futures.append(future)
+
+                success = [future.result() for future in as_completed(futures, timeout=None)]
+                success = [s[1] for s in sorted(success)]
+
+        # remove captions where the transformation status was erroneous
+        erroneous = len(success) - sum(success)
+        if erroneous != 0:
+            logger.warning(f"Removing {erroneous} samples due to errors while applying text transformations!")
         self.metadata = self.metadata[success]
 
         logger.info(f"Finished Transformation Step in {time.time() - start} seconds!")

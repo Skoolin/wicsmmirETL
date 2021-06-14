@@ -25,6 +25,7 @@ from spacy_readability import Readability
 from tqdm import tqdm
 
 from transformations.image_transformation_base import ImageTransformationBase
+from transformations.text_transformation_base import TextTransformationBase
 
 
 @unique
@@ -134,6 +135,24 @@ def apply_img_transformations(wikicaps_id: int,
             return wikicaps_id, True
     except Exception:
         logger.exception(f"Error while applying Image Transformations to {img_path}!")
+        return wikicaps_id, False
+
+
+def apply_text_transformations(row_id,
+                               row,
+                               metadata: pd.DataFrame,
+                               transformations: List[TextTransformationBase]) -> Tuple[int, bool]:
+    wikicaps_id = row['wikicaps_id']
+    try:
+        text = row['caption']
+        for t in transformations:
+            logger.debug(f"Applying {t.name} Text Transformation to {text}...")
+            text = t(text, ne_types=row['ne_types'], ne_texts=row['ne_texts'])
+            metadata.at[row_id, 'caption'] = text
+
+        return wikicaps_id, True
+    except Exception:
+        logger.exception(f"Error while applying Image Transformations to caption with id {wikicaps_id}!")
         return wikicaps_id, False
 
 
